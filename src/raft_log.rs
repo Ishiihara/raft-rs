@@ -61,6 +61,9 @@ pub struct RaftLog<T: Storage> {
 
     /// The logger attached to this `RaftLog`.
     logger: Logger,
+
+    /// Size of uncommitted entries
+    uncommitted_size: usize,
 }
 
 impl<T> Default for RaftLog<T>
@@ -77,6 +80,7 @@ where
             logger: default_logger().new(o!()),
         }
     }
+    
 }
 
 impl<T> ToString for RaftLog<T>
@@ -109,6 +113,7 @@ impl<T: Storage> RaftLog<T> {
             unstable: Unstable::new(last_index + 1, tag.clone()),
             tag,
             logger,
+            uncommitted_size: 0,
         }
     }
 
@@ -245,6 +250,7 @@ impl<T: Storage> RaftLog<T> {
         term: u64,
         committed: u64,
         ents: &[Entry],
+        max: usize,
     ) -> Option<u64> {
         let last_new_index = idx + ents.len() as u64;
         if self.match_term(idx, term) {
@@ -257,7 +263,7 @@ impl<T: Storage> RaftLog<T> {
                 )
             } else {
                 let offset = idx + 1;
-                self.append(&ents[(conflict_idx - offset) as usize..]);
+                self.append(&ents[(conflict_idx - offset) as usize..], max).ok()?;
             }
             self.commit_to(cmp::min(committed, last_new_index));
             return Some(last_new_index);
@@ -283,6 +289,8 @@ impl<T: Storage> RaftLog<T> {
                 self.last_index()
             )
         }
+        let entries = self.slice(self.committed, to_commit, util::NO_LIMIT).unwrap();
+        self.reduce_uncommitted_size(&entries);
         self.committed = to_commit;
     }
 
@@ -334,8 +342,11 @@ impl<T: Storage> RaftLog<T> {
             "tag" => &self.tag,
             "ents" => ?ents,
         );
+    }
+    
+    pub fn append(&mut self, ents: &[Entry], max: usize) -> Result<u64> {
         if ents.is_empty() {
-            return self.last_index();
+            return Ok(self.last_index());
         }
 
         let after = ents[0].index - 1;
@@ -345,8 +356,9 @@ impl<T: Storage> RaftLog<T> {
                 self.tag, after, self.committed
             )
         }
+        self.increase_uncommitted_size(ents, max)?;
         self.unstable.truncate_and_append(ents);
-        self.last_index()
+        return Ok(self.last_index())
     }
 
     /// Returns slice of entries that are not committed.
@@ -528,6 +540,35 @@ impl<T: Storage> RaftLog<T> {
         );
         self.committed = snapshot.get_metadata().index;
         self.unstable.restore(snapshot);
+    }
+
+    /// increase_uncommitted_size computes the size of the proposed entries and
+    /// determines whether they would push leader over its max_uncommitted_entries_size limit.
+    /// If the new entries would exceed the limit, the method returns false. If not,
+    /// the increase in uncommitted entry size is recorded and the method returns
+    /// true.
+    fn increase_uncommitted_size(&mut self, entries: &[Entry], max: usize) -> Result<()> {
+        let sum = util::get_size(entries);
+        if max > 0 && self.uncommitted_size+sum > max {
+            return Err(Error::ProposalDropped)
+        }
+        self.uncommitted_size += sum;
+        Ok(())
+    }
+
+    /// reduce_uncommitted_size accounts for the newly committed entries by decreasing
+    /// the uncommitted entry size limit.
+    fn reduce_uncommitted_size(&mut self, entries: &[Entry]) {
+        let sum = util::get_size(entries);
+
+        if sum > self.uncommitted_size {
+            // uncommittedSize may underestimate the size of the uncommitted Raft
+            // log tail but will never overestimate it. Saturate at 0 instead of
+            // allowing overflow.
+            self.uncommitted_size = 0
+        } else {
+            self.uncommitted_size -= sum
+        }
     }
 }
 

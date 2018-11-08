@@ -208,6 +208,10 @@ pub struct Raft<T: Storage> {
 
     /// The logger for the raft structure.
     logger: slog::Logger,
+    /// Limits the aggregate byte size of the uncommitted entries that may be appended to a leader's
+    /// log. Once this limit is exceeded, proposals will begin to return ErrProposalDropped errors.
+    /// Note: 0 for no limit.
+    max_uncommitted_entries_size: usize,
 }
 
 trait AssertSend: Send {}
@@ -277,6 +281,7 @@ impl<T: Storage> Raft<T> {
             tag: c.tag.to_owned(),
             batch_append: c.batch_append,
             logger,
+            max_uncommitted_entries_size: c.max_uncommitted_entries_size,
         };
         for p in peers {
             let pr = Progress::new(1, r.max_inflight);
@@ -455,6 +460,14 @@ impl<T: Storage> Raft<T> {
     #[inline]
     pub fn set_batch_append(&mut self, batch_append: bool) {
         self.batch_append = batch_append;
+    }
+    
+    #[inline]
+    fn get_max_uncommitted_size(&self) -> usize {
+        if self.state == StateRole::Leader {
+            return self.max_uncommitted_entries_size
+        }
+        return 0
     }
 
     // send persists state to stable storage and then sends to its mailbox.
@@ -783,20 +796,22 @@ impl<T: Storage> Raft<T> {
 
     /// Appends a slice of entries to the log. The entries are updated to match
     /// the current index and term.
-    pub fn append_entry(&mut self, es: &mut [Entry]) {
+    pub fn append_entry(&mut self, es: &mut [Entry]) -> Result<()> {
         let mut li = self.raft_log.last_index();
         for (i, e) in es.iter_mut().enumerate() {
             e.set_term(self.term);
             e.set_index(li + 1 + i as u64);
         }
+        let max = self.get_max_uncommitted_size();
         // use latest "last" index after truncate/append
-        li = self.raft_log.append(es);
+        li = self.raft_log.append(es, max)?;
 
         let self_id = self.id;
         self.mut_prs().get_mut(self_id).unwrap().maybe_update(li);
 
         // Regardless of maybe_commit's return, our caller will call bcastAppend.
         self.maybe_commit();
+        Ok(())
     }
 
     /// Returns true to indicate that there will probably be some readiness need to be handled.
@@ -985,6 +1000,9 @@ impl<T: Storage> Raft<T> {
             "tag" => &self.tag,
         );
         trace!(self.logger, "EXIT become_leader");
+        
+        self.append_entry(&mut [Entry::new()]).unwrap();
+        info!("{} became leader at term {}", self.tag, self.term);
     }
 
     fn num_pending_conf(&self, ents: &[Entry]) -> usize {
@@ -1775,7 +1793,7 @@ impl<T: Storage> Raft<T> {
                         }
                     }
                 }
-                self.append_entry(&mut m.mut_entries());
+                self.append_entry(&mut m.mut_entries())?;
                 self.bcast_append();
                 return Ok(());
             }
@@ -2087,7 +2105,7 @@ impl<T: Storage> Raft<T> {
         to_send.set_msg_type(MessageType::MsgAppendResponse);
         match self
             .raft_log
-            .maybe_append(m.index, m.log_term, m.commit, &m.entries)
+            .maybe_append(m.index, m.log_term, m.commit, &m.entries, 0)
         {
             Some(mlast_index) => {
                 to_send.set_index(mlast_index);

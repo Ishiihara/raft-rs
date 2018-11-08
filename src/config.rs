@@ -101,6 +101,11 @@ pub struct Config {
 
     /// Batches every append msg if any append msg already exists
     pub batch_append: bool,
+    
+    /// Limits the aggregate byte size of the uncommitted entries that may be appended to a leader's
+    /// log. Once this limit is exceeded, proposals will begin to return ErrProposalDropped errors.
+    /// Note: 0 for no limit.
+    pub max_uncommitted_entries_size: usize,
 }
 
 impl Default for Config {
@@ -121,6 +126,7 @@ impl Default for Config {
             skip_bcast_commit: false,
             tag: "".into(),
             batch_append: false,
+            max_uncommitted_entries_size: 0,
         }
     }
 }
