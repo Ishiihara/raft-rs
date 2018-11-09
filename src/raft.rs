@@ -209,8 +209,8 @@ pub struct Raft<T: Storage> {
     /// The logger for the raft structure.
     logger: slog::Logger,
     /// Limits the aggregate byte size of the uncommitted entries that may be appended to a leader's
-    /// log. Once this limit is exceeded, proposals will begin to return ErrProposalDropped errors.
-    /// Note: 0 for no limit.
+    /// log. Once this limit is exceeded, proposals will begin to return ProposalDropped errors.
+    /// Defaults to no limit.
     max_uncommitted_entries_size: usize,
 }
 
@@ -463,11 +463,11 @@ impl<T: Storage> Raft<T> {
     }
     
     #[inline]
-    fn get_max_uncommitted_size(&self) -> usize {
+    fn max_uncommitted_size(&self) -> usize {
         if self.state == StateRole::Leader {
-            return self.max_uncommitted_entries_size
+            return self.max_uncommitted_entries_size;
         }
-        return 0
+        raft_log::NO_SIZE_LIMIT
     }
 
     // send persists state to stable storage and then sends to its mailbox.
@@ -802,7 +802,7 @@ impl<T: Storage> Raft<T> {
             e.set_term(self.term);
             e.set_index(li + 1 + i as u64);
         }
-        let max = self.get_max_uncommitted_size();
+        let max = self.max_uncommitted_size();
         // use latest "last" index after truncate/append
         li = self.raft_log.append(es, max)?;
 
@@ -952,8 +952,6 @@ impl<T: Storage> Raft<T> {
         );
         let term = self.term;
         self.reset(term);
-        self.leader_id = self.id;
-        self.state = StateRole::Leader;
 
         // Followers enter replicate mode when they've been successfully probed
         // (perhaps after having received a snapshot as a result). The leader is
@@ -969,6 +967,7 @@ impl<T: Storage> Raft<T> {
         // could be expensive.
         self.pending_conf_index = self.raft_log.last_index();
 
+<<<<<<< HEAD
         self.append_entry(&mut [Entry::default()]);
 
         // In most cases, we append only a new entry marked with an index and term.
@@ -1001,7 +1000,15 @@ impl<T: Storage> Raft<T> {
         );
         trace!(self.logger, "EXIT become_leader");
         
+=======
+        // This unwrap is safe, because append_entry only returns a ProposalDropped
+        // error if self.state is set to Leader, which it is not, yet.
+>>>>>>> Fix existing tests.
         self.append_entry(&mut [Entry::new()]).unwrap();
+
+        self.leader_id = self.id;
+        self.state = StateRole::Leader;
+
         info!("{} became leader at term {}", self.tag, self.term);
     }
 
@@ -2103,10 +2110,20 @@ impl<T: Storage> Raft<T> {
         let mut to_send = Message::default();
         to_send.set_to(m.from);
         to_send.set_msg_type(MessageType::MsgAppendResponse);
+<<<<<<< HEAD
         match self
             .raft_log
             .maybe_append(m.index, m.log_term, m.commit, &m.entries, 0)
         {
+=======
+        match self.raft_log.maybe_append(
+            m.get_index(),
+            m.get_log_term(),
+            m.get_commit(),
+            m.get_entries(),
+            raft_log::NO_SIZE_LIMIT,
+        ) {
+>>>>>>> Fix existing tests.
             Some(mlast_index) => {
                 to_send.set_index(mlast_index);
                 self.send(to_send);

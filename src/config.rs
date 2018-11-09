@@ -30,6 +30,7 @@ use super::{
     errors::{Error, Result},
     INVALID_ID,
 };
+use raft_log::NO_SIZE_LIMIT;
 
 /// Config contains the parameters to start a raft.
 #[derive(Clone)]
@@ -103,8 +104,8 @@ pub struct Config {
     pub batch_append: bool,
     
     /// Limits the aggregate byte size of the uncommitted entries that may be appended to a leader's
-    /// log. Once this limit is exceeded, proposals will begin to return ErrProposalDropped errors.
-    /// Note: 0 for no limit.
+    /// log. Once this limit is exceeded, proposals will begin to return ProposalDropped errors.
+    /// Defaults to no limit.
     pub max_uncommitted_entries_size: usize,
 }
 
@@ -126,7 +127,7 @@ impl Default for Config {
             skip_bcast_commit: false,
             tag: "".into(),
             batch_append: false,
-            max_uncommitted_entries_size: 0,
+            max_uncommitted_entries_size: NO_SIZE_LIMIT,
         }
     }
 }
@@ -204,6 +205,11 @@ impl Config {
         if self.read_only_option == ReadOnlyOption::LeaseBased && !self.check_quorum {
             return Err(Error::ConfigInvalid(
                 "read_only_option == LeaseBased requires check_quorum == true".into(),
+            ));
+        
+        if self.max_uncommitted_entries_size == 0 {
+            return Err(Error::ConfigInvalid(
+                "max uncommitted entries size must be greater than 0".to_owned(),
             ));
         }
 
