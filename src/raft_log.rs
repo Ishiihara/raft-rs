@@ -37,8 +37,7 @@ use slog::Logger;
 
 pub use crate::util::NO_LIMIT;
 
-/// A number to represent that there is no limit.
-pub const NO_SIZE_LIMIT: usize = usize::max_value();
+pub use crate::util::NO_SIZE_LIMIT;
 
 /// Raft log implementation
 pub struct RaftLog<T: Storage> {
@@ -81,6 +80,7 @@ where
             applied: Default::default(),
             tag: Default::default(),
             logger: default_logger().new(o!()),
+            uncommitted_size: NO_SIZE_LIMIT,
         }
     }
     
@@ -344,6 +344,7 @@ impl<T: Storage> RaftLog<T> {
     }
 
     /// Appends a set of entries to the unstable list.
+    /*
     pub fn append(&mut self, ents: &[Entry]) -> u64 {
         trace!(
             self.logger,
@@ -352,6 +353,7 @@ impl<T: Storage> RaftLog<T> {
             "ents" => ?ents,
         );
     }
+    */
     
     pub fn append(&mut self, ents: &[Entry], max: usize) -> Result<u64> {
         if ents.is_empty() {
@@ -666,15 +668,10 @@ mod test {
         ];
         for (i, &(ref ents, wconflict)) in tests.iter().enumerate() {
             let store = MemStorage::new();
-<<<<<<< HEAD
             let mut raft_log = new_raft_log(store, &l);
-            raft_log.append(&previous_ents);
-=======
-            let mut raft_log = new_raft_log(store);
             raft_log
                 .append(&previous_ents, raft_log::NO_SIZE_LIMIT)
                 .unwrap();
->>>>>>> Fix existing tests.
             let gconflict = raft_log.find_conflict(ents);
             if gconflict != wconflict {
                 panic!("#{}: conflict = {}, want {}", i, gconflict, wconflict)
@@ -687,15 +684,10 @@ mod test {
         let l = testing_logger().new(o!("test" => "is_up_to_date"));
         let previous_ents = vec![new_entry(1, 1), new_entry(2, 2), new_entry(3, 3)];
         let store = MemStorage::new();
-<<<<<<< HEAD
         let mut raft_log = new_raft_log(store, &l);
-        raft_log.append(&previous_ents);
-=======
-        let mut raft_log = new_raft_log(store);
         raft_log
             .append(&previous_ents, raft_log::NO_SIZE_LIMIT)
             .unwrap();
->>>>>>> Fix existing tests.
         let tests = vec![
             // greater term, ignore lastIndex
             (raft_log.last_index() - 1, 4, true),
@@ -743,13 +735,8 @@ mod test {
         for (i, &(ref ents, windex, ref wents, wunstable)) in tests.iter().enumerate() {
             let store = MemStorage::new();
             store.wl().append(&previous_ents).expect("append failed");
-<<<<<<< HEAD
             let mut raft_log = new_raft_log(store, &l);
-            let index = raft_log.append(ents);
-=======
-            let mut raft_log = new_raft_log(store);
             let index = raft_log.append(ents, raft_log::NO_SIZE_LIMIT).unwrap();
->>>>>>> Fix existing tests.
             if index != windex {
                 panic!("#{}: last_index = {}, want {}", i, index, windex);
             }
@@ -963,13 +950,8 @@ mod test {
                 .wl()
                 .apply_snapshot(new_snapshot(snap_index, snap_term))
                 .expect("");
-<<<<<<< HEAD
             let mut raft_log = new_raft_log(store, &l);
-            raft_log.append(new_ents);
-=======
-            let mut raft_log = new_raft_log(store);
             raft_log.append(new_ents, raft_log::NO_SIZE_LIMIT).unwrap();
->>>>>>> Fix existing tests.
             raft_log.stable_to(stablei, stablet);
             if raft_log.unstable.offset != wunstable {
                 panic!(
@@ -986,15 +968,10 @@ mod test {
         let tests = vec![(1, 1, 2), (2, 2, 3), (2, 1, 1), (3, 1, 1)];
         for (i, &(stablei, stablet, wunstable)) in tests.iter().enumerate() {
             let store = MemStorage::new();
-<<<<<<< HEAD
             let mut raft_log = new_raft_log(store, &l);
-            raft_log.append(&[new_entry(1, 1), new_entry(2, 2)]);
-=======
-            let mut raft_log = new_raft_log(store);
             raft_log
                 .append(&[new_entry(1, 1), new_entry(2, 2)], raft_log::NO_SIZE_LIMIT)
                 .unwrap();
->>>>>>> Fix existing tests.
             raft_log.stable_to(stablei, stablet);
             if raft_log.unstable.offset != wunstable {
                 panic!(
@@ -1022,15 +999,10 @@ mod test {
                 .expect("");
 
             // append unstable entries to raftlog
-<<<<<<< HEAD
             let mut raft_log = new_raft_log(store, &l);
-            raft_log.append(&previous_ents[(unstable - 1)..]);
-=======
-            let mut raft_log = new_raft_log(store);
             raft_log
                 .append(&previous_ents[(unstable - 1)..], raft_log::NO_SIZE_LIMIT)
                 .unwrap();
->>>>>>> Fix existing tests.
 
             let ents = raft_log.unstable_entries().unwrap_or(&[]).to_vec();
             let l = ents.len();
@@ -1061,13 +1033,8 @@ mod test {
         for (i, &(applied, ref expect_entries)) in tests.iter().enumerate() {
             let store = MemStorage::new();
             store.wl().apply_snapshot(new_snapshot(3, 1)).expect("");
-<<<<<<< HEAD
             let mut raft_log = new_raft_log(store, &l);
-            raft_log.append(&ents);
-=======
-            let mut raft_log = new_raft_log(store);
             raft_log.append(&ents, raft_log::NO_SIZE_LIMIT).unwrap();
->>>>>>> Fix existing tests.
             raft_log.maybe_commit(5, 1);
             #[allow(deprecated)]
             raft_log.applied_to(applied);
@@ -1091,13 +1058,8 @@ mod test {
         for (i, &(applied, has_next)) in tests.iter().enumerate() {
             let store = MemStorage::new();
             store.wl().apply_snapshot(new_snapshot(3, 1)).expect("");
-<<<<<<< HEAD
             let mut raft_log = new_raft_log(store, &l);
-            raft_log.append(&ents);
-=======
-            let mut raft_log = new_raft_log(store);
             raft_log.append(&ents, raft_log::NO_SIZE_LIMIT).unwrap();
->>>>>>> Fix existing tests.
             raft_log.maybe_commit(5, 1);
             #[allow(deprecated)]
             raft_log.applied_to(applied);
@@ -1398,15 +1360,10 @@ mod test {
             tests.iter().enumerate()
         {
             let store = MemStorage::new();
-<<<<<<< HEAD
             let mut raft_log = new_raft_log(store, &l);
-            raft_log.append(&previous_ents);
-=======
-            let mut raft_log = new_raft_log(store);
             raft_log
                 .append(&previous_ents, raft_log::NO_SIZE_LIMIT)
                 .unwrap();
->>>>>>> Fix existing tests.
             raft_log.committed = commit;
             let res = panic::catch_unwind(AssertUnwindSafe(|| {
                 raft_log.maybe_append(index, log_term, committed, ents, raft_log::NO_SIZE_LIMIT)
@@ -1451,15 +1408,10 @@ mod test {
         ];
         for (i, &(commit, wcommit, wpanic)) in tests.iter().enumerate() {
             let store = MemStorage::new();
-<<<<<<< HEAD
             let mut raft_log = new_raft_log(store, &l);
-            raft_log.append(&previous_ents);
-=======
-            let mut raft_log = new_raft_log(store);
             raft_log
                 .append(&previous_ents, raft_log::NO_SIZE_LIMIT)
                 .unwrap();
->>>>>>> Fix existing tests.
             raft_log.committed = previous_commit;
             let has_panic =
                 panic::catch_unwind(AssertUnwindSafe(|| raft_log.commit_to(commit))).is_err();
@@ -1526,17 +1478,11 @@ mod test {
             .wl()
             .apply_snapshot(new_snapshot(offset, 0))
             .expect("");
-<<<<<<< HEAD
         let mut raft_log = new_raft_log(store, &l);
-        for i in 1u64..=num {
-            raft_log.append(&[new_entry(i + offset, 0)]);
-=======
-        let mut raft_log = new_raft_log(store);
         for i in 1u64..(num + 1) {
             raft_log
                 .append(&[new_entry(i + offset, 0)], raft_log::NO_SIZE_LIMIT)
                 .unwrap();
->>>>>>> Fix existing tests.
         }
         let first = offset + 1;
         let tests = vec![

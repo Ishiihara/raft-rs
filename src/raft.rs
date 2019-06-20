@@ -467,7 +467,7 @@ impl<T: Storage> Raft<T> {
         if self.state == StateRole::Leader {
             return self.max_uncommitted_entries_size;
         }
-        raft_log::NO_SIZE_LIMIT
+        super::raft_log::NO_SIZE_LIMIT
     }
 
     // send persists state to stable storage and then sends to its mailbox.
@@ -967,7 +967,6 @@ impl<T: Storage> Raft<T> {
         // could be expensive.
         self.pending_conf_index = self.raft_log.last_index();
 
-<<<<<<< HEAD
         self.append_entry(&mut [Entry::default()]);
 
         // In most cases, we append only a new entry marked with an index and term.
@@ -999,17 +998,6 @@ impl<T: Storage> Raft<T> {
             "tag" => &self.tag,
         );
         trace!(self.logger, "EXIT become_leader");
-        
-=======
-        // This unwrap is safe, because append_entry only returns a ProposalDropped
-        // error if self.state is set to Leader, which it is not, yet.
->>>>>>> Fix existing tests.
-        self.append_entry(&mut [Entry::new()]).unwrap();
-
-        self.leader_id = self.id;
-        self.state = StateRole::Leader;
-
-        info!("{} became leader at term {}", self.tag, self.term);
     }
 
     fn num_pending_conf(&self, ents: &[Entry]) -> usize {
@@ -2110,20 +2098,10 @@ impl<T: Storage> Raft<T> {
         let mut to_send = Message::default();
         to_send.set_to(m.from);
         to_send.set_msg_type(MessageType::MsgAppendResponse);
-<<<<<<< HEAD
         match self
             .raft_log
-            .maybe_append(m.index, m.log_term, m.commit, &m.entries, 0)
+            .maybe_append(m.index, m.log_term, m.commit, &m.entries, super::raft_log::NO_SIZE_LIMIT)
         {
-=======
-        match self.raft_log.maybe_append(
-            m.get_index(),
-            m.get_log_term(),
-            m.get_commit(),
-            m.get_entries(),
-            raft_log::NO_SIZE_LIMIT,
-        ) {
->>>>>>> Fix existing tests.
             Some(mlast_index) => {
                 to_send.set_index(mlast_index);
                 self.send(to_send);

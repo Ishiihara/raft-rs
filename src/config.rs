@@ -30,7 +30,7 @@ use super::{
     errors::{Error, Result},
     INVALID_ID,
 };
-use raft_log::NO_SIZE_LIMIT;
+use super::util::NO_SIZE_LIMIT;
 
 /// Config contains the parameters to start a raft.
 #[derive(Clone)]
@@ -206,7 +206,8 @@ impl Config {
             return Err(Error::ConfigInvalid(
                 "read_only_option == LeaseBased requires check_quorum == true".into(),
             ));
-        
+        }
+
         if self.max_uncommitted_entries_size == 0 {
             return Err(Error::ConfigInvalid(
                 "max uncommitted entries size must be greater than 0".to_owned(),

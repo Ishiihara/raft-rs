@@ -16,16 +16,14 @@
 
 use std::u64;
 
-<<<<<<< HEAD
 use crate::eraftpb::{ConfChange, ConfChangeType, ConfState, Entry, Message};
 use prost::Message as ProstMsg;
-=======
-use eraftpb::Entry;
-use protobuf::Message;
->>>>>>> Fix existing tests.
 
 /// A number to represent that there is no limit.
 pub const NO_LIMIT: u64 = u64::MAX;
+
+/// Size limit.
+pub const NO_SIZE_LIMIT: usize = usize::max_value();
 
 /// Truncates the list of entries down to a specific byte-length of
 /// all entries together.
@@ -154,6 +152,6 @@ pub fn is_continuous_ents(msg: &Message, ents: &[Entry]) -> bool {
 pub fn get_size(entries: &[Entry]) -> usize {
     entries
         .iter()
-        .map(|e| e.get_data().len() + e.get_context().len())
+        .map(|e| e.data.len() + e.context.len())
         .sum()
 }

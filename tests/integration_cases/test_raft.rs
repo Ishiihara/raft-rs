@@ -41,6 +41,8 @@ use slog::Logger;
 use crate::integration_cases::test_raft_paper::commit_noop_entry;
 use crate::test_util::*;
 
+use raft::util::NO_SIZE_LIMIT;
+
 fn new_progress(
     state: ProgressState,
     matched: u64,
@@ -2651,13 +2653,8 @@ fn test_leader_increase_next() {
         (ProgressState::Probe, 2, 2),
     ];
     for (i, (state, next_idx, wnext)) in tests.drain(..).enumerate() {
-<<<<<<< HEAD
         let mut sm = new_test_raft(1, vec![1, 2], 10, 1, new_storage(), &l);
-        sm.raft_log.append(&previous_ents);
-=======
-        let mut sm = new_test_raft(1, vec![1, 2], 10, 1, new_storage());
         sm.raft_log.append(&previous_ents, NO_SIZE_LIMIT).unwrap();
->>>>>>> Fix existing tests.
         sm.become_candidate();
         sm.become_leader();
         sm.mut_prs().get_mut(2).unwrap().state = state;
@@ -2817,13 +2814,8 @@ fn test_restore_ignore_snapshot() {
     let l = testing_logger().new(o!("test" => "restore_ignore_snapshot"));
     let previous_ents = vec![empty_entry(1, 1), empty_entry(1, 2), empty_entry(1, 3)];
     let commit = 1u64;
-<<<<<<< HEAD
-    let mut sm = new_test_raft(1, vec![], 10, 1, new_storage(), &l);
-    sm.raft_log.append(&previous_ents);
-=======
-    let mut sm = new_test_raft(1, vec![1, 2], 10, 1, new_storage());
+    let mut sm = new_test_raft(1, vec![1, 2], 10, 1, new_storage(), &l);
     sm.raft_log.append(&previous_ents, NO_SIZE_LIMIT).unwrap();
->>>>>>> Fix existing tests.
     sm.raft_log.commit_to(commit);
 
     let mut s = new_snapshot(commit, 1, vec![1, 2]);
